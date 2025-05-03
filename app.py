@@ -1,10 +1,45 @@
-# crop_recommender.py - Updated with NPK sliders and Soil Moisture input
+# crop_recommender.py - with background image and enhanced styling
 import streamlit as st
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
+import base64
 
+# --- Set Wide Layout and Page Info ---
 st.set_page_config(layout="wide", page_title="🌱 Smart Crop Advisor", page_icon="🌾")
+
+# --- Background Image ---
+def get_base64_of_bin_file(png_file):
+    with open(png_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+def set_background(png_file):
+    bin_str = get_base64_of_bin_file(png_file)
+    page_bg_img = f'''
+    <style>
+    .stApp {{
+        background-image: url("data:image/png;base64,{bin_str}");
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        background-position: center;
+        color: white;
+    }}
+    .stApp::before {{
+        content: "";
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.4);  /* Overlay darkness */
+        z-index: -1;
+    }}
+    </style>
+    '''
+    st.markdown(page_bg_img, unsafe_allow_html=True)
+
+# 👇 Specify the path to your uploaded image
+set_background("C:/Users/Wale/Documents/GitHub/Smart-Farm-Pro/acric.jpg")
 
 # --- Data Loading and Model Training ---
 @st.cache_resource
@@ -16,13 +51,13 @@ def load_data_and_train():
         'Phosphorus': 'P',
         'Potassium': 'K',
         'pH_Value': 'pH',
-        'Soil_Moisture': 'Soil_Moisture'  # Ensure this column is in the CSV
+        'Soil_Moisture': 'Soil_Moisture'
     })
 
     le = LabelEncoder()
     df['Crop'] = le.fit_transform(df['Crop'])
     model = RandomForestClassifier()
-    model.fit(df.drop(['Crop', 'Rainfall'], axis=1), df['Crop'])  # Exclude Rainfall during model training
+    model.fit(df.drop(['Crop', 'Rainfall'], axis=1), df['Crop'])
 
     crop_stats = {}
     for crop in le.classes_:
@@ -46,6 +81,7 @@ def load_data_and_train():
 model, le, crop_stats = load_data_and_train()
 all_crops = sorted(le.classes_)
 
+# --- UI Title ---
 st.title("🌾 Smart Crop Advisor")
 st.markdown("""
 *Customize soil nutrient values (N-P-K) and environmental factors*  
@@ -58,28 +94,17 @@ with st.sidebar:
     selected_crop = st.selectbox("Choose your crop", all_crops)
 
     st.header("🧪 Soil Nutrients")
-    # Get min/max ranges from the dataset for sliders
-    n_min, n_max = 0, 300  # You can adjust these based on your data
+    n_min, n_max = 0, 300
     p_min, p_max = 0, 300
     k_min, k_max = 0, 300
     
-    # Use the crop's average values as default but allow customization
-    n_value = st.slider("Nitrogen (N) ppm", 
-                        n_min, n_max, 
-                        int(round(crop_stats[selected_crop]['N_avg'], 0)),  # Round and convert to int
-                        step=1,  # Ensure step is integer
+    n_value = st.slider("Nitrogen (N) ppm", n_min, n_max, int(round(crop_stats[selected_crop]['N_avg'], 0)), step=1,
                         help=f"Typical range for {selected_crop}: {crop_stats[selected_crop]['N_range'][0]:.1f}-{crop_stats[selected_crop]['N_range'][1]:.1f}")
     
-    p_value = st.slider("Phosphorus (P) ppm", 
-                        p_min, p_max, 
-                        int(round(crop_stats[selected_crop]['P_avg'], 0)),  # Round and convert to int
-                        step=1,  # Ensure step is integer
+    p_value = st.slider("Phosphorus (P) ppm", p_min, p_max, int(round(crop_stats[selected_crop]['P_avg'], 0)), step=1,
                         help=f"Typical range for {selected_crop}: {crop_stats[selected_crop]['P_range'][0]:.1f}-{crop_stats[selected_crop]['P_range'][1]:.1f}")
     
-    k_value = st.slider("Potassium (K) ppm", 
-                        k_min, k_max, 
-                        int(round(crop_stats[selected_crop]['K_avg'], 0)),  # Round and convert to int
-                        step=1,  # Ensure step is integer
+    k_value = st.slider("Potassium (K) ppm", k_min, k_max, int(round(crop_stats[selected_crop]['K_avg'], 0)), step=1,
                         help=f"Typical range for {selected_crop}: {crop_stats[selected_crop]['K_range'][0]:.1f}-{crop_stats[selected_crop]['K_range'][1]:.1f}")
 
     st.header("🌦️ Environmental Factors")
@@ -104,14 +129,13 @@ if st.button("🧑‍🌾 Analyze Growing Conditions", type="primary"):
 
     requirements = crop_stats[selected_crop]
     violations = []
-    
-    # Check all parameters including NPK
+
     for param in ['N', 'P', 'K', 'Temperature', 'Humidity', 'pH', 'Soil_Moisture']:
         if param in ['N', 'P', 'K']:
             min_val, max_val = requirements[f'{param}_range']
         else:
             min_val, max_val = requirements[param]
-            
+
         if not (min_val <= analysis_data[param] <= max_val):
             violations.append(f"{param}: {analysis_data[param]} (requires {min_val}-{max_val})")
 
@@ -124,7 +148,6 @@ if st.button("🧑‍🌾 Analyze Growing Conditions", type="primary"):
             st.write(f"- {issue}")
         st.warning("Consider adjusting your inputs or choosing a different crop")
 
-    # Alternative crops based on all parameters including NPK
     st.subheader("🌱 Alternative Suitable Crops")
     suitable_crops = []
     for crop in all_crops:
@@ -164,22 +187,4 @@ with st.expander("📊 Crop Requirement Table", expanded=False):
             'Soil Moisture (%)': f"{stats['Soil_Moisture'][0]}–{stats['Soil_Moisture'][1]}"
         })
 
-    st.dataframe(
-        pd.DataFrame(summary_data),
-        height=500,
-        use_container_width=True,
-        column_config={
-            "N Range (ppm)": st.column_config.NumberColumn(
-                "Nitrogen Range",
-                help="Required Nitrogen range in ppm"
-            ),
-            "P Range (ppm)": st.column_config.NumberColumn(
-                "Phosphorus Range",
-                help="Required Phosphorus range in ppm"
-            ),
-            "K Range (ppm)": st.column_config.NumberColumn(
-                "Potassium Range",
-                help="Required Potassium range in ppm"
-            )
-        }
-    )
+    st.dataframe(pd.DataFrame(summary_data), height=500, use_container_width=True)
